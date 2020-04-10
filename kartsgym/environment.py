@@ -1,11 +1,18 @@
+from typing import List
+
 import numpy as np
-import pymunk
+from Box2D import b2Body, b2World, b2FixtureDef, b2CircleShape
 from gym import Env, register, spaces
+
+from kartsgym.map import Map
 
 FPS = 50
 
 VIEWPORT_W = 640
 VIEWPORT_H = 640
+
+KART_MASS = 300
+KART_RADIUS = 1.5
 
 # Solarized Colors
 BASE03 = (0 / 255, 43 / 255, 54 / 255)
@@ -26,12 +33,37 @@ CYAN = (42 / 255, 161 / 255, 152 / 255)
 GREEN = (133 / 255, 153 / 255, 0 / 255)
 
 
+class World:
+    def __init__(self, map: Map):
+        self.width = 50.0
+        self.height = 50.0
+        self.world = b2World(gravity=(0, 0))
+
+        self.kart: b2Body = self.world.CreateDynamicBody(
+            position=(3.0, -1.0),
+            fixtures=b2FixtureDef(
+                shape=b2CircleShape(radius=KART_RADIUS),
+                density=1,
+            ),
+        )
+        self.kart.color1, self.kart.color2 = BLUE, BASE03
+
+    def step(self, wheel_angle: np.float32, gas: np.float32):
+        self.world.Step(1 / FPS, 6 * 30, 2 * 30)
+
+    def draw_list(self):
+        return [
+            self.kart,
+        ]
+
+
 class KartsEnv(Env):
     """
     Karts time run simulation environment.
 
-    The whole simulation happens in a (0,0) to (1,1) coordinate system using np.float32
-    for all variables.
+    The whole simulation happens in a (0,0)-centered, metre-based, coordinate system
+    using np.float32 for all metric variables. The exact size of the world is determined
+    by the chosen map.
 
     Action space
 
@@ -46,47 +78,60 @@ class KartsEnv(Env):
         -90deg, -45deg, 0deg, 45deg, 90deg. Where 0.0 means direct contact.
     """
 
-    space: pymunk.Space
-
     metadata = {'render.modes': ['human']}
 
     def __init__(self):
         super(KartsEnv, self).__init__()
 
         self.viewer = None
-
-        self.reset()
+        self.map = NotImplemented
+        self.world = World(self.map)
 
         self.action_space = spaces.Box(
-            low=np.array([np.deg2rad(-100.0), 0.0], dtype=np.float32),
-            high=np.array([np.deg2rad(100.0), 1.0], dtype=np.float32),
-            dtype=np.float32,
+            low=np.array([np.deg2rad(-100.0), 0.0]),
+            high=np.array([np.deg2rad(100.0), 1.0]),
         )
-        self.observation_space = spaces.Box(np.float32(0.0), np.inf, shape=(6,), dtype=np.float32)
+        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(6,))
 
     def reset(self):
-        self.space = pymunk.Space()
-
-        # TODO
-
+        self.world = World(self.map)
         return self.observe()
 
-    def step(self, action):
-        # TODO
-
-        self.space.step(1/FPS)
-
-        return self.observe(), 0.0, False, None
+    def step(self, action: List[np.float32]):
+        self.world.step(action[0], action[1])
+        return self.observe(), self.reward(), self.is_done(), None
 
     def render(self, mode='human'):
-        from gym.envs.classic_control.rendering import Viewer
+        import gym.envs.classic_control.rendering as r
         if self.viewer is None:
-            self.viewer = Viewer(VIEWPORT_W, VIEWPORT_H)
-        self.viewer.set_bounds(0.0, 1.0, 0.0, 1.0)
+            self.viewer = r.Viewer(VIEWPORT_W, VIEWPORT_H)
 
-        self.viewer.draw_polygon([(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)], color=BASE3)
+        bounds = (
+            -self.world.width / 2,
+            self.world.width / 2,
+            -self.world.height / 2,
+            self.world.height / 2,
+        )
+        self.viewer.set_bounds(*bounds)
+        self.viewer.draw_polygon([
+            (bounds[0], bounds[3]),
+            (bounds[1], bounds[3]),
+            (bounds[1], bounds[2]),
+            (bounds[0], bounds[2]),
+        ], color=BASE3)
 
-        # TODO
+        for obj in self.world.draw_list():
+            for f in obj.fixtures:
+                trans = f.body.transform
+                if type(f.shape) is b2CircleShape:
+                    t = r.Transform(translation=trans * f.shape.pos)
+                    self.viewer.draw_circle(radius=f.shape.radius, color=obj.color1).add_attr(t)
+                    self.viewer.draw_circle(radius=f.shape.radius, color=obj.color2,
+                                            filled=False).add_attr(t)
+                    self.viewer.draw_polyline([(0, 0), (0, f.shape.radius)], color=obj.color2,
+                                              linewidth=3).add_attr(t)
+                else:
+                    raise TypeError(f'Unknown shape to draw: {type(f.shape)}')
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
@@ -98,6 +143,14 @@ class KartsEnv(Env):
     def observe(self):
         # TODO
         return NotImplemented
+
+    def reward(self) -> np.float32:
+        # TODO
+        return NotImplemented
+
+    def is_done(self) -> bool:
+        # TODO
+        return False
 
 
 register(

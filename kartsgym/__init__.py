@@ -15,10 +15,13 @@ def main():
             action = env.action_space.sample()
             observation, reward, done, info = env.step(action)
             if done:
-                print("Episode finished after {} timesteps".format(t + 1))
+                print(f"Episode finished after {t + 1} timesteps")
                 break
+        else:
+            print("Episode failed")
 
     env.close()
+    exit(0)
 
 
 if __name__ == '__main__':

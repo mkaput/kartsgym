@@ -1,29 +1,38 @@
 # Based on: https://www.iforce2d.net/b2dtut/top-down-car
 
 from dataclasses import dataclass, InitVar, field
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from Box2D import b2Body, b2World, b2CircleShape, b2PolygonShape, b2Vec2, b2Dot, \
-    b2RevoluteJoint, b2FixtureDef
+    b2RevoluteJoint, b2FixtureDef, b2ChainShape
 from gym import Env, register, spaces
+from itertools import tee, cycle
 
 from kartsgym.map import Map
 
 FPS = 50
 
-VIEWPORT_W = 800
-VIEWPORT_H = 800
+VIEWPORT_W = 1024
+VIEWPORT_H = 1024
 
-BACKGROUND = 1, 1, 1
-KART_CHASSIS1 = 173 / 255, 127 / 255, 168 / 255
-KART_CHASSIS2 = 92 / 255, 53 / 255, 102 / 255
-KART_WHEEL1 = 117 / 255, 80 / 255, 123 / 255
-KART_WHEEL2 = 92 / 255, 53 / 255, 102 / 255
-BARRIER1 = 138 / 255, 226 / 255, 52 / 255
-BARRIER2 = 78 / 255, 154 / 255, 6 / 255
-LASER = 239 / 255, 41 / 255, 41 / 255
-CHECKPOINT = 114 / 255, 159 / 255, 207 / 255
+
+def hexcol(h):
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+BACKGROUND = hexcol('FAFAFA')
+KART_CHASSIS = hexcol('d50000'), hexcol('311B92')
+KART_WHEEL = hexcol('212121'), hexcol('000000')
+BARRIER = hexcol('b71c1c'),
+TRACK = hexcol('CFD8DC'), hexcol('B0BEC5'), hexcol('90A4AE')
+LASER = hexcol('f44336')
+
+
+def pairwise(it):
+    a, b = tee(it)
+    next(b, None)
+    return zip(a, b)
 
 
 @dataclass
@@ -35,17 +44,19 @@ class Wheel:
     max_lateral_impulse: float
 
     traction: float = 1.0
+    position: InitVar[b2Vec2] = b2Vec2(0.0, 0.0)
 
     body: b2Body = field(init=False)
 
-    def __post_init__(self, world: b2World):
+    def __post_init__(self, world: b2World, position):
         self.body: b2Body = world.CreateDynamicBody(
+            position=position,
             fixtures=b2FixtureDef(
                 shape=b2PolygonShape(box=(0.5, 1.25)),
                 density=1.0
             )
         )
-        self.body.color1, self.body.color2 = KART_WHEEL1, KART_WHEEL2
+        self.body.color = KART_WHEEL
 
     @property
     def lateral_velocity(self) -> b2Vec2:
@@ -84,13 +95,16 @@ class Wheel:
 @dataclass
 class Kart:
     world: InitVar[b2World]
+    position: InitVar[Tuple[float, float]]
 
     body: b2Body = field(init=False)
     joints: List[b2RevoluteJoint] = field(init=False, default_factory=lambda: [None] * 4)
     wheels: List[Wheel] = field(init=False, default_factory=lambda: [None] * 4)
 
-    def __post_init__(self, world: b2World):
+    def __post_init__(self, world, position):
+        chassis_position = b2Vec2(position)
         self.body = world.CreateDynamicBody(
+            position=chassis_position,
             fixtures=b2FixtureDef(
                 shape=b2PolygonShape(
                     vertices=[
@@ -107,7 +121,7 @@ class Kart:
             ),
             angularDamping=3,
         )
-        self.body.color1, self.body.color2 = KART_CHASSIS1, KART_CHASSIS2
+        self.body.color = KART_CHASSIS
 
         for i, (x, y, is_front) in enumerate([
             (-3, 8.5, True),
@@ -124,7 +138,9 @@ class Kart:
                 max_brake_force = -150
                 max_lateral_impulse = 8.5
 
-            self.wheels[i] = Wheel(world, max_drive_force, max_brake_force, max_lateral_impulse)
+            wheel_position = b2Vec2(x, y) + chassis_position
+            self.wheels[i] = Wheel(world, max_drive_force, max_brake_force, max_lateral_impulse,
+                                   position=wheel_position)
             self.joints[i] = world.CreateRevoluteJoint(
                 enableLimit=True,
                 lowerAngle=0.0,
@@ -159,16 +175,24 @@ class Kart:
 
 class World:
     def __init__(self, map: Map):
-        self.width = 180.0
-        self.height = 180.0
+        self.dim = map.dim()
         self.world = b2World(gravity=(0, 0))
-        self.kart = Kart(self.world)
+
+        self.barriers = []
+        for loop in map.barriers:
+            shape = b2ChainShape(vertices_loop=loop)
+            barrier = self.world.CreateStaticBody(fixtures=b2FixtureDef(shape=shape))
+            barrier.color = BARRIER
+            self.barriers.append(barrier)
+
+        self.kart = Kart(self.world, map.kart)
 
     def step(self, wheel_angle: np.float32, gas: np.float32):
         self.kart.update(wheel_angle, gas)
         self.world.Step(1 / FPS, 6 * 30, 2 * 30)
 
     def draw_chain(self):
+        yield from self.barriers
         yield from self.kart.draw_chain()
 
 
@@ -195,11 +219,11 @@ class KartsEnv(Env):
 
     metadata = {'render.modes': ['human', 'rgb_array']}
 
-    def __init__(self):
+    def __init__(self, map: str = 'circle'):
         super(KartsEnv, self).__init__()
 
         self.viewer = None
-        self.map = NotImplemented
+        self.map = Map.load(map)
         self.world = World(self.map)
 
         self.action_space = spaces.Box(
@@ -221,25 +245,51 @@ class KartsEnv(Env):
         if self.viewer is None:
             self.viewer = r.Viewer(VIEWPORT_W, VIEWPORT_H)
 
-        bb = max(self.world.width, self.world.height) / 2.0
-        self.viewer.set_bounds(-bb, bb, -bb, bb)
-        self.viewer.draw_polygon([(-bb, bb), (bb, bb), (bb, -bb), (-bb, -bb)], color=BACKGROUND)
+        minx, maxx, miny, maxy = self.world.dim
+
+        width = maxx - minx
+        height = maxy - miny
+
+        # Maintain 1:1 aspect ratio
+        if width > height:
+            diff = (width - height) / 2.0
+            miny -= diff
+            maxy += diff
+        elif height > width:
+            diff = (height - width) / 2.0
+            minx -= diff
+            maxx += diff
+
+        # Add some margins
+        margin = 10
+        minx -= margin
+        miny -= margin
+        maxx += margin
+        maxy += margin
+
+        self.viewer.set_bounds(minx, maxx, miny, maxy)
+        self.viewer.draw_polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)],
+                                 color=BACKGROUND)
 
         for obj in self.world.draw_chain():
             for f in obj.fixtures:
                 trans = f.body.transform
                 if type(f.shape) is b2CircleShape:
                     t = r.Transform(translation=trans * f.shape.pos)
-                    self.viewer.draw_circle(radius=f.shape.radius, color=obj.color1).add_attr(t)
-                    self.viewer.draw_circle(radius=f.shape.radius, color=obj.color2,
+                    self.viewer.draw_circle(radius=f.shape.radius, color=obj.color[0]).add_attr(t)
+                    self.viewer.draw_circle(radius=f.shape.radius, color=obj.color[1],
                                             filled=False).add_attr(t)
-                    self.viewer.draw_polyline([(0, 0), (0, f.shape.radius)], color=obj.color2,
+                    self.viewer.draw_polyline([(0, 0), (0, f.shape.radius)], color=obj.color[1],
                                               linewidth=3).add_attr(t)
                 elif type(f.shape) is b2PolygonShape:
                     path = [trans * v for v in f.shape.vertices]
-                    self.viewer.draw_polygon(path, color=obj.color1)
+                    self.viewer.draw_polygon(path, color=obj.color[0])
                     path.append(path[0])
-                    self.viewer.draw_polyline(path, color=obj.color2)
+                    self.viewer.draw_polyline(path, color=obj.color[1])
+                elif type(f.shape) is b2ChainShape:
+                    path = [trans * v for v in f.shape.vertices]
+                    for (a, b), color in zip(pairwise(path), cycle(obj.color)):
+                        self.viewer.draw_polyline([a, b], color=color, linewidth=1)
                 else:
                     raise TypeError(f'Unknown shape to draw: {type(f.shape)}')
 

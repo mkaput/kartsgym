@@ -11,9 +11,9 @@ def main():
         observation = env.reset()
         for t in range(100):
             env.render()
-            print(observation)
             action = env.action_space.sample()
             observation, reward, done, info = env.step(action)
+            print(observation, '=>', action, '=>', reward, done)
             if done:
                 print(f"Episode finished after {t + 1} timesteps")
                 break

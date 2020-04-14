@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+     viewBox="0 0 630 630" style="enable-background:new 0 0 630 630;" xml:space="preserve">
+<style type="text/css">
+	.checkpoint{fill:#999999;stroke:#666666;stroke-miterlimit:10;}
+	.kart{fill:#FFFFFF;}
+	.barrier{fill:none;stroke:#006837;stroke-miterlimit:10;}
+</style>
+    <polygon id="00" class="checkpoint"
+             points="118.8,269.8 120.5,266.6 12.6,225 11.8,225.8 11.8,304.5 118.8,309.1 118.8,269.8 	"/>
+    <polygon id="01" class="checkpoint"
+             points="12.6,225 24.3,230.3 120.5,266.6 136.4,235.3 53,181.7 	"/>
+    <polygon id="02" class="checkpoint"
+             points="82.8,149.8 53,181.7 136.4,235.3 140.8,226.8 156.4,220.5 109.6,143.1 	"/>
+    <polygon id="03" class="checkpoint" points="109.6,143.1 156.4,220.5 189.5,207 175.8,126.6 	"/>
+    <polygon id="04" class="checkpoint"
+             points="241.6,118.4 202.8,119.8 175.8,126.6 189.5,207 199.8,202.8 237.7,200.5 	"/>
+    <polygon id="05" class="checkpoint" points="241.6,118.4 237.7,200.5 292,197.1 300.4,116.4 	"/>
+    <polygon id="06" class="checkpoint"
+             points="300.4,116.4 292,197.1 336.7,198.2 354,114.5 300.4,116.4 	"/>
+    <polygon id="07" class="checkpoint"
+             points="372.8,113.8 354,114.5 336.7,198.2 366,201.3 404,119.5 	"/>
+    <polygon id="08" class="checkpoint" points="404,119.5 366,201.3 413.5,206.3 466,130.8 	"/>
+    <polygon id="09" class="checkpoint"
+             points="528.2,142.1 466,130.8 413.5,206.3 465.2,219.8 528.2,142.1 	"/>
+    <polygon id="10" class="checkpoint"
+             points="580.4,174.9 537.8,143.8 528.2,142.1 465.2,219.8 500.7,231.2 580.4,174.9 	"/>
+    <polygon id="11" class="checkpoint"
+             points="611.8,197.8 580.4,174.9 500.7,231.2 505.8,232.8 505.8,268.5 611.8,220.2 611.8,197.8"/>
+    <polygon id="12" class="checkpoint"
+             points="611.8,300.8 611.8,220.2 505.8,268.5 505.8,301.2 	"/>
+    <polygon id="13" class="checkpoint"
+             points="611.8,300.8 505.8,301.2 505.8,333.8 504,342.3 611.8,351.4 611.8,332.8 	"/>
+    <polygon id="14" class="checkpoint"
+             points="504,342.3 497.2,375.3 607.3,401.3 611.8,402.9 611.8,351.4 	"/>
+    <polygon id="15" class="checkpoint"
+             points="607.3,401.3 497.2,375.3 494.8,386.8 488.9,391.2 580.6,449.1 611.8,425.8 611.8,402.9 607.3,401.3 	"/>
+    <polygon id="16" class="checkpoint"
+             points="513.3,408.3 488.9,391.2 451.8,418.9 536.2,482.2 580.6,449.1 513.3,408.3 	"/>
+    <polygon id="17" class="checkpoint"
+             points="451.8,418.9 423.8,439.8 408.7,442.2 500.6,508.7 536.2,482.2 	"/>
+    <polygon id="18" class="checkpoint"
+             points="500.6,508.7 408.7,442.2 382.6,446.3 413,519.8 485.8,519.8 500.6,508.7 	"/>
+    <polygon id="19" class="checkpoint"
+             points="382.6,446.3 340.5,452.9 352.1,519.8 413,519.8 	"/>
+    <polygon id="20" class="checkpoint"
+             points="352.1,519.8 340.5,452.9 302.8,458.8 288.8,458.8 294.9,519.8 303.8,519.8 	"/>
+    <polygon id="21" class="checkpoint"
+             points="288.8,458.8 245.3,458.8 247,519.8 294.9,519.8 	"/>
+    <polygon id="22" class="checkpoint"
+             points="245.3,458.8 209.2,458.8 205.3,475.3 203.4,519.8 247,519.8 	"/>
+    <polygon id="23" class="checkpoint"
+             points="209.2,458.8 189.8,458.8 186,458.8 161.4,519.8 179.8,519.8 203.4,519.8 205.3,475.3 	"/>
+    <polygon id="24" class="checkpoint"
+             points="144.8,458.8 144.5,458.4 114.8,519.8 161.4,519.8 186,458.8 144.8,458.8 	"/>
+    <polygon id="25" class="checkpoint" points="133,444.7 54,519.8 114.8,519.8 144.5,458.4 	"/>
+    <polygon id="26" class="checkpoint"
+             points="11.8,457.9 11.8,458.8 51.8,519.8 54,519.8 133,444.7 120.9,430.3 	"/>
+    <polygon id="27" class="checkpoint"
+             points="118.8,407.1 11.8,412.7 11.8,457.9 120.9,430.3 118.8,427.8 	"/>
+    <polygon id="28" class="checkpoint"
+             points="11.8,375.3 11.8,412.7 118.8,407.1 118.8,375.3 	"/>
+    <polygon id="29" class="checkpoint" points="11.8,340.3 11.8,375.3 118.8,375.3 118.8,342 	"/>
+    <polygon id="30" class="checkpoint"
+             points="11.8,304.5 11.8,332.8 11.8,340.3 118.8,342 118.8,333.8 118.8,309.1 	"/>
+    <polygon class="barrier" points="11.8,332.8 11.8,225.8 82.8,149.8 202.8,119.8 372.8,113.8 537.8,143.8 611.8,197.8 611.8,332.8
+	611.8,425.8 485.8,519.8 303.8,519.8 179.8,519.8 51.8,519.8 11.8,458.8 "/>
+    <polygon class="barrier" points="118.8,333.8 118.8,269.8 140.8,226.8 199.8,202.8 313.8,195.8 427.8,207.8 505.8,232.8 505.8,333.8
+	494.8,386.8 423.8,439.8 302.8,458.8 189.8,458.8 144.8,458.8 118.8,427.8 "/>
+</svg>

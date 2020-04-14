@@ -7,9 +7,9 @@ def main():
     import gym
     env = gym.make('Karts-v0')
 
-    for i_episode in range(3):
+    for i_episode in range(1):
         observation = env.reset()
-        for t in range(100):
+        for t in range(1000):
             env.render()
             action = env.action_space.sample()
             observation, reward, done, info = env.step(action)

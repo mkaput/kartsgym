@@ -33,7 +33,6 @@ COLOR_KART_WHEEL = hexcol('212121'), hexcol('000000')
 COLOR_BARRIER = hexcol('b71c1c'),
 COLOR_TRACK_VISITED = hexcol('F1F8E9'), hexcol('DCEDC8')
 COLOR_TRACK_NOT_VISITED = hexcol('FAFAFA'), hexcol('F5F5F5')
-COLOR_LASER = hexcol('f44336')
 
 
 def pairwise(it):
@@ -206,6 +205,7 @@ class World:
         self.kart = Kart(self.world, world_map.kart)
 
         self.hit_barriers = False
+        self.elapsed_steps = 0
 
     @property
     def checkpoint_discontinuity(self):
@@ -219,6 +219,7 @@ class World:
     def step(self, wheel_angle: np.float32, gas: np.float32):
         self.kart.update(wheel_angle, gas)
         self.world.Step(1 / FPS, 6 * 30, 2 * 30)
+        self.elapsed_steps += 1
 
     def on_contact(self, contact, began):
         fixture_a, fixture_b = contact.fixtureA, contact.fixtureB
@@ -351,19 +352,17 @@ class KartsEnv(Env):
             self.viewer = None
 
     def observe(self):
-        # TODO
-        return NotImplemented
+        velocity = self.world.kart.body.linearVelocity.length
+        return [velocity, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     def total_reward(self) -> float:
         if self.world.hit_barriers or self.world.checkpoint_discontinuity:
             return -1000000.0
 
-        reward = 0.0
-
+        reward = -float(self.world.elapsed_steps)
         for checkpoint in self.world.checkpoints:
             if checkpoint.visited:
-                reward += 10.0
-
+                reward += 250.0
         return reward
 
     def is_done(self) -> bool:

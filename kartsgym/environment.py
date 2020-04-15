@@ -1,11 +1,12 @@
 # Based on: https://www.iforce2d.net/b2dtut/top-down-car
 
+import weakref
 from dataclasses import dataclass, InitVar, field
 from typing import List, Tuple
 
 import numpy as np
 from Box2D import b2Body, b2World, b2CircleShape, b2PolygonShape, b2Vec2, b2Dot, \
-    b2RevoluteJoint, b2FixtureDef, b2ChainShape
+    b2RevoluteJoint, b2EdgeShape, b2ContactListener
 from gym import Env, register, spaces
 from itertools import tee, cycle
 
@@ -21,12 +22,18 @@ def hexcol(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
 
 
-BACKGROUND = hexcol('FAFAFA')
-KART_CHASSIS = hexcol('d50000'), hexcol('311B92')
-KART_WHEEL = hexcol('212121'), hexcol('000000')
-BARRIER = hexcol('b71c1c'),
-TRACK = hexcol('CFD8DC'), hexcol('B0BEC5'), hexcol('90A4AE')
-LASER = hexcol('f44336')
+BARRIER = 'barrier'
+CHASSIS = 'chassis'
+CHECKPOINT = 'checkpoint'
+WHEEL = 'wheel'
+
+COLOR_BACKGROUND = hexcol('FFFFFF')
+COLOR_KART_CHASSIS = hexcol('d50000'), hexcol('311B92')
+COLOR_KART_WHEEL = hexcol('212121'), hexcol('000000')
+COLOR_BARRIER = hexcol('b71c1c'),
+COLOR_TRACK_VISITED = hexcol('F1F8E9'), hexcol('DCEDC8')
+COLOR_TRACK_NOT_VISITED = hexcol('FAFAFA'), hexcol('F5F5F5')
+COLOR_LASER = hexcol('f44336')
 
 
 def pairwise(it):
@@ -49,14 +56,9 @@ class Wheel:
     body: b2Body = field(init=False)
 
     def __post_init__(self, world: b2World, position):
-        self.body: b2Body = world.CreateDynamicBody(
-            position=position,
-            fixtures=b2FixtureDef(
-                shape=b2PolygonShape(box=(0.5, 1.25)),
-                density=1.0
-            )
-        )
-        self.body.color = KART_WHEEL
+        self.body: b2Body = world.CreateDynamicBody(position=position, userData=(WHEEL, None))
+        self.body.CreatePolygonFixture(box=(0.5, 1.25), density=1.0)
+        self.body.color = COLOR_KART_WHEEL
 
     @property
     def lateral_velocity(self) -> b2Vec2:
@@ -103,25 +105,19 @@ class Kart:
 
     def __post_init__(self, world, position):
         chassis_position = b2Vec2(position)
-        self.body = world.CreateDynamicBody(
-            position=chassis_position,
-            fixtures=b2FixtureDef(
-                shape=b2PolygonShape(
-                    vertices=[
-                        (1.5, 0),
-                        (3, 2.5),
-                        (2.8, 5.5),
-                        (1, 10),
-                        (-1, 10),
-                        (-2.8, 5.5),
-                        (-3, 2.5),
-                        (-1.5, 0),
-                    ]),
-                density=0.1,
-            ),
-            angularDamping=3,
-        )
-        self.body.color = KART_CHASSIS
+        self.body = world.CreateDynamicBody(position=chassis_position, angularDamping=3,
+                                            userData=(CHASSIS, None))
+        self.body.CreatePolygonFixture(vertices=[
+            (1.5, 0),
+            (3, 2.5),
+            (2.8, 5.5),
+            (1, 10),
+            (-1, 10),
+            (-2.8, 5.5),
+            (-3, 2.5),
+            (-1.5, 0),
+        ], density=1.0)
+        self.body.color = COLOR_KART_CHASSIS
 
         for i, (x, y, is_front) in enumerate([
             (-3, 8.5, True),
@@ -149,6 +145,7 @@ class Kart:
                 bodyB=self.wheels[i].body,
                 localAnchorA=b2Vec2(x, y),
                 localAnchorB=b2Vec2(0, 0),
+                maxMotorTorque=1000,
             )
 
     def update(self, wheel_angle: float, gas: float):
@@ -173,25 +170,78 @@ class Kart:
             yield from wheel.draw_chain()
 
 
+class ContactListener(b2ContactListener):
+    def __init__(self, world: 'World'):
+        super().__init__()
+        self.on_contact = weakref.WeakMethod(world.on_contact)
+
+    def BeginContact(self, contact):
+        self.on_contact()(contact, True)
+
+    def EndContact(self, contact):
+        self.on_contact()(contact, False)
+
+
 class World:
-    def __init__(self, map: Map):
-        self.dim = map.dim()
-        self.world = b2World(gravity=(0, 0))
+    def __init__(self, world_map: Map):
+        self.dim = world_map.dim()
+        self.contact_listener = ContactListener(self)
+        self.world = b2World(gravity=(0, 0), contactListener=self.contact_listener)
 
         self.barriers = []
-        for loop in map.barriers:
-            shape = b2ChainShape(vertices_loop=loop)
-            barrier = self.world.CreateStaticBody(fixtures=b2FixtureDef(shape=shape))
-            barrier.color = BARRIER
+        for loop in world_map.barriers:
+            barrier = self.world.CreateStaticBody(userData=(BARRIER, None))
+            barrier.CreateEdgeChain(loop)
+            barrier.color = COLOR_BARRIER
             self.barriers.append(barrier)
 
-        self.kart = Kart(self.world, map.kart)
+        self.checkpoints = []
+        for i, loop in enumerate(world_map.checkpoints):
+            checkpoint = self.world.CreateStaticBody(userData=(CHECKPOINT, i))
+            checkpoint.CreatePolygonFixture(vertices=loop, isSensor=True)
+            checkpoint.visited = False
+            checkpoint.color = COLOR_TRACK_NOT_VISITED
+            self.checkpoints.append(checkpoint)
+
+        self.kart = Kart(self.world, world_map.kart)
+
+        self.hit_barriers = False
+
+    @property
+    def checkpoint_discontinuity(self):
+        v = True
+        for c in self.checkpoints:
+            if c.visited > v:
+                return True
+            v = c.visited
+        return False
 
     def step(self, wheel_angle: np.float32, gas: np.float32):
         self.kart.update(wheel_angle, gas)
         self.world.Step(1 / FPS, 6 * 30, 2 * 30)
 
+    def on_contact(self, contact, began):
+        fixture_a, fixture_b = contact.fixtureA, contact.fixtureB
+        if fixture_a.body.userData > fixture_b.body.userData:
+            fixture_a, fixture_b = fixture_b, fixture_a
+
+        body_a, body_b = fixture_a.body, fixture_b.body
+        ud_a, ud_b = body_a.userData, body_b.userData
+        if not ud_a or not ud_b:
+            return
+
+        ty_a, opt_a = ud_a
+        ty_b, opt_b = ud_b
+
+        if ty_a is CHECKPOINT and ty_b is WHEEL and began:
+            checkpoint = self.checkpoints[opt_a]
+            checkpoint.visited = True
+            checkpoint.color = COLOR_TRACK_VISITED
+        elif ty_a is BARRIER and ty_b is WHEEL and began:
+            self.hit_barriers = True
+
     def draw_chain(self):
+        yield from self.checkpoints
         yield from self.barriers
         yield from self.kart.draw_chain()
 
@@ -219,11 +269,11 @@ class KartsEnv(Env):
 
     metadata = {'render.modes': ['human', 'rgb_array']}
 
-    def __init__(self, map: str = 'circle'):
-        super(KartsEnv, self).__init__()
+    def __init__(self, world_map: str = 'circle'):
+        super().__init__()
 
         self.viewer = None
-        self.map = Map.load(map)
+        self.map = Map.load(world_map)
         self.world = World(self.map)
 
         self.action_space = spaces.Box(
@@ -238,7 +288,7 @@ class KartsEnv(Env):
 
     def step(self, action: List[np.float32]):
         self.world.step(action[0], action[1])
-        return self.observe(), self.reward(), self.is_done(), None
+        return self.observe(), self.total_reward(), self.is_done(), None
 
     def render(self, mode='human'):
         import gym.envs.classic_control.rendering as r
@@ -269,7 +319,7 @@ class KartsEnv(Env):
 
         self.viewer.set_bounds(minx, maxx, miny, maxy)
         self.viewer.draw_polygon([(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)],
-                                 color=BACKGROUND)
+                                 color=COLOR_BACKGROUND)
 
         for obj in self.world.draw_chain():
             for f in obj.fixtures:
@@ -286,10 +336,10 @@ class KartsEnv(Env):
                     self.viewer.draw_polygon(path, color=obj.color[0])
                     path.append(path[0])
                     self.viewer.draw_polyline(path, color=obj.color[1])
-                elif type(f.shape) is b2ChainShape:
+                elif type(f.shape) is b2EdgeShape:
                     path = [trans * v for v in f.shape.vertices]
                     for (a, b), color in zip(pairwise(path), cycle(obj.color)):
-                        self.viewer.draw_polyline([a, b], color=color, linewidth=1)
+                        self.viewer.draw_polyline([a, b], color=color, linewidth=3)
                 else:
                     raise TypeError(f'Unknown shape to draw: {type(f.shape)}')
 
@@ -304,13 +354,21 @@ class KartsEnv(Env):
         # TODO
         return NotImplemented
 
-    def reward(self) -> np.float32:
-        # TODO
-        return NotImplemented
+    def total_reward(self) -> float:
+        if self.world.hit_barriers or self.world.checkpoint_discontinuity:
+            return -1000000.0
+
+        reward = 0.0
+
+        for checkpoint in self.world.checkpoints:
+            if checkpoint.visited:
+                reward += 10.0
+
+        return reward
 
     def is_done(self) -> bool:
-        # TODO
-        return False
+        return self.world.hit_barriers or self.world.checkpoint_discontinuity \
+               or all(c.visited for c in self.world.checkpoints)
 
 
 register(

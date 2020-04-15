@@ -51,9 +51,10 @@ class Map:
                         point = float(x_str), -float(y_str)
                         poly.append(point)
 
-                    # Remove loops, they will be handled by Box2D
-                    if len(poly) > 1 and poly[0] == poly[-1]:
-                        poly.pop()
+                    # Ensure checkpoints are looped
+                    if elem.attrib['class'] == 'checkpoint':
+                        if poly[0] != poly[-1]:
+                            poly.append(poly[0])
 
                     target.append((poly, polyid))
                 else:

@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 import numpy as np
 from Box2D import b2Body, b2World, b2CircleShape, b2PolygonShape, b2Vec2, b2Dot, \
-    b2RevoluteJoint, b2EdgeShape, b2ContactListener
+    b2RevoluteJoint, b2ChainShape, b2ContactListener, b2RayCastCallback, b2Mat22
 from gym import Env, register, spaces
 from itertools import tee, cycle
 
@@ -17,6 +17,15 @@ FPS = 50
 VIEWPORT_W = 1024
 VIEWPORT_H = 1024
 
+RAY_FOV = 100.0
+RAY_ANGLES = [-90.0, -45.0, 0.0, 45.0, 90.0]
+
+CHECKPOINT_REWARD = 250.0
+BAD_DRIVING_PENALTY = -1000000.0
+TIME_PENALTY_FACTOR = 1.0
+GAME_OVER_REWARD_THRESHOLD = -100.0
+
+RENDER_RAYS = True
 
 def hexcol(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
@@ -33,6 +42,7 @@ COLOR_KART_WHEEL = hexcol('212121'), hexcol('000000')
 COLOR_BARRIER = hexcol('b71c1c'),
 COLOR_TRACK_VISITED = hexcol('F1F8E9'), hexcol('DCEDC8')
 COLOR_TRACK_NOT_VISITED = hexcol('FAFAFA'), hexcol('F5F5F5')
+COLOR_LASER = hexcol('D500F9')
 
 
 def pairwise(it):
@@ -163,6 +173,16 @@ class Kart:
         for joint in self.joints[:2]:
             joint.SetLimits(wheel_angle, wheel_angle)
 
+    @property
+    def lateral_velocity(self) -> b2Vec2:
+        current_right_normal = self.body.GetWorldVector(b2Vec2(1, 0))
+        return b2Dot(current_right_normal, self.body.linearVelocity) * current_right_normal
+
+    @property
+    def forward_velocity(self) -> b2Vec2:
+        current_forward_normal = self.body.GetWorldVector(b2Vec2(0, 1))
+        return b2Dot(current_forward_normal, self.body.linearVelocity) * current_forward_normal
+
     def draw_chain(self):
         yield self.body
         for wheel in self.wheels:
@@ -181,6 +201,41 @@ class ContactListener(b2ContactListener):
         self.on_contact()(contact, False)
 
 
+class DistanceRayCaster(b2RayCastCallback):
+    def __init__(self, world: 'World', num: int, angle: float):
+        super().__init__()
+        self.world = weakref.ref(world)
+        self.num = num
+        self.rot = b2Mat22()
+        self.rot.angle = angle
+        self.a = b2Vec2((0, 0))
+        self.b = b2Vec2((0, 0))
+
+    def cast(self):
+        world = self.world()
+        if world is not None:
+            self.a = world.kart.body.position
+            forward_normal = world.kart.body.GetWorldVector(b2Vec2(0, 1))
+            self.b = self.a + self.rot * forward_normal * RAY_FOV
+            world.world.RayCast(self, self.a, self.b)
+
+    def ReportFixture(self, fixture, point, normal, fraction):
+        ud = fixture.body.userData
+        if not ud:
+            return -1.0
+
+        ty, _ = ud
+        if ty is not BARRIER:
+            return -1.0
+
+        world = self.world()
+        if world is None:
+            return 0.0
+
+        world.distances[self.num] = fraction * RAY_FOV
+        return fraction
+
+
 class World:
     def __init__(self, world_map: Map):
         self.dim = world_map.dim()
@@ -189,8 +244,8 @@ class World:
 
         self.barriers = []
         for loop in world_map.barriers:
-            barrier = self.world.CreateStaticBody(userData=(BARRIER, None))
-            barrier.CreateEdgeChain(loop)
+            barrier: b2Body = self.world.CreateStaticBody(userData=(BARRIER, None))
+            barrier.CreateChainFixture(vertices_chain=loop)
             barrier.color = COLOR_BARRIER
             self.barriers.append(barrier)
 
@@ -204,8 +259,12 @@ class World:
 
         self.kart = Kart(self.world, world_map.kart)
 
+        self.raycasters = [DistanceRayCaster(self, i, np.deg2rad(deg))
+                           for i, deg in enumerate(RAY_ANGLES)]
+
         self.hit_barriers = False
         self.elapsed_steps = 0
+        self.distances = [np.inf for _ in RAY_ANGLES]
 
     @property
     def checkpoint_discontinuity(self):
@@ -220,6 +279,10 @@ class World:
         self.kart.update(wheel_angle, gas)
         self.world.Step(1 / FPS, 6 * 30, 2 * 30)
         self.elapsed_steps += 1
+
+        self.distances = [np.inf for _ in RAY_ANGLES]
+        for raycaster in self.raycasters:
+            raycaster.cast()
 
     def on_contact(self, contact, began):
         fixture_a, fixture_b = contact.fixtureA, contact.fixtureB
@@ -262,10 +325,12 @@ class KartsEnv(Env):
 
     Observation space
 
-    1. Current speed in metres/second, from 0.0 (meaning stop) to infinity.
-    2-6. The distance to the closest obstacle in metres, observed at angles
+    1. Current forward velocity in metres/second, from 0.0 (meaning stop) to infinity.
+    2. Current lateral velocity in metres/second, from 0.0 (meaning no drag) to infinity,
+       positive values indicate drag to the right side of the cart, negative to the left.
+    3-7. The distance to the closest obstacle in metres, observed at angles
          relative to the front of the kart: -90deg, -45deg, 0deg, 45deg, 90deg.
-         Where 0.0 means direct collision.
+         Where values close to ~5.0 mean almost certain collision.
     """
 
     metadata = {'render.modes': ['human', 'rgb_array']}
@@ -281,7 +346,7 @@ class KartsEnv(Env):
             low=np.array([np.deg2rad(-35.0), -1.0]),
             high=np.array([np.deg2rad(35.0), 1.0]),
         )
-        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(6,))
+        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(7,))
 
     def reset(self):
         self.world = World(self.map)
@@ -289,7 +354,19 @@ class KartsEnv(Env):
 
     def step(self, action: List[np.float32]):
         self.world.step(action[0], action[1])
-        return self.observe(), self.total_reward(), self.is_done(), None
+
+        if self.world.hit_barriers or self.world.checkpoint_discontinuity:
+            reward = BAD_DRIVING_PENALTY
+        else:
+            reward = -float(self.world.elapsed_steps) * TIME_PENALTY_FACTOR
+            for checkpoint in self.world.checkpoints:
+                if checkpoint.visited:
+                    reward += CHECKPOINT_REWARD
+
+        done = reward < GAME_OVER_REWARD_THRESHOLD \
+               or all(c.visited for c in self.world.checkpoints)
+
+        return self.observe(), reward, done, None
 
     def render(self, mode='human'):
         import gym.envs.classic_control.rendering as r
@@ -337,12 +414,16 @@ class KartsEnv(Env):
                     self.viewer.draw_polygon(path, color=obj.color[0])
                     path.append(path[0])
                     self.viewer.draw_polyline(path, color=obj.color[1])
-                elif type(f.shape) is b2EdgeShape:
+                elif type(f.shape) is b2ChainShape:
                     path = [trans * v for v in f.shape.vertices]
                     for (a, b), color in zip(pairwise(path), cycle(obj.color)):
                         self.viewer.draw_polyline([a, b], color=color, linewidth=3)
                 else:
                     raise TypeError(f'Unknown shape to draw: {type(f.shape)}')
+
+        if RENDER_RAYS:
+            for rc in self.world.raycasters:
+                self.viewer.draw_line(rc.a, rc.b, color=COLOR_LASER)
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
@@ -352,22 +433,12 @@ class KartsEnv(Env):
             self.viewer = None
 
     def observe(self):
-        velocity = self.world.kart.body.linearVelocity.length
-        return [velocity, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-    def total_reward(self) -> float:
-        if self.world.hit_barriers or self.world.checkpoint_discontinuity:
-            return -1000000.0
-
-        reward = -float(self.world.elapsed_steps)
-        for checkpoint in self.world.checkpoints:
-            if checkpoint.visited:
-                reward += 250.0
-        return reward
-
-    def is_done(self) -> bool:
-        return self.world.hit_barriers or self.world.checkpoint_discontinuity \
-               or all(c.visited for c in self.world.checkpoints)
+        kart = self.world.kart
+        return [
+            kart.forward_velocity.length,
+            kart.lateral_velocity.length,
+            *self.world.distances,
+        ]
 
 
 register(

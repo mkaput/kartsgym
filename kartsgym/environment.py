@@ -176,12 +176,12 @@ class Kart:
     @property
     def lateral_velocity(self) -> b2Vec2:
         current_right_normal = self.body.GetWorldVector(b2Vec2(1, 0))
-        return b2Dot(current_right_normal, self.body.linearVelocity) * current_right_normal
+        return b2Dot(current_right_normal, self.body.linearVelocity)
 
     @property
     def forward_velocity(self) -> b2Vec2:
         current_forward_normal = self.body.GetWorldVector(b2Vec2(0, 1))
-        return b2Dot(current_forward_normal, self.body.linearVelocity) * current_forward_normal
+        return b2Dot(current_forward_normal, self.body.linearVelocity)
 
     def draw_chain(self):
         yield self.body
@@ -435,8 +435,8 @@ class KartsEnv(Env):
     def observe(self):
         kart = self.world.kart
         return [
-            kart.forward_velocity.length,
-            kart.lateral_velocity.length,
+            kart.forward_velocity,
+            kart.lateral_velocity,
             *self.world.distances,
         ]
 

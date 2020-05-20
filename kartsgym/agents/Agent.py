@@ -18,7 +18,7 @@ class Agent:
             new_observation, reward, done, info = self.environment.step(action)
             new_observation = self.discretise(new_observation)
             if logs:
-                logging.debug(observation, '=>', action, '=>', reward, done)
+                logging.debug(f"{observation} => {action} => {reward} {done}")
             self.update_knowledge(action, observation, new_observation, reward)
             step += 1
             observation = new_observation
@@ -27,9 +27,9 @@ class Agent:
     def learn(self, max_attempts, render=False):
         results = []
         for i in range(max_attempts):
-            logging.info(f"start {i}")
+            logging.info(f"start try {i}")
             results.append(self.attempt(render=render))
-            logging.info(f"end {i} with results: {results[i]}")
+            logging.info(f"end {i} with results: steps: {results[i][0]}, reward: {results[i][1]}")
         return results
 
     def discretise(self, observation):

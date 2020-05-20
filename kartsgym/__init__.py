@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import gym
 from kartsgym import environment
@@ -20,23 +21,23 @@ def check_random():
 
 def check_q_agent():
     env = gym.make('Karts-v0')
-    agent = QLearner(env, alfa=0.1, gamma=0.8, backets=10, action_backets=4)
-    agent.learn(1000)
+    agent = QLearner(env, alfa=0.1, gamma=0.8, backets=10, action_backets=10)
+    agent.learn(2000)
     check_agent(agent)
-    agent.save_agent("sample3.pkl")
+    agent.save_agent("sample.pkl")
     env.close()
 
 def check_q_agent_file():
     env = gym.make('Karts-v0')
-    agent = QLearner.load_agent("sample3.pkl", env)
+    agent = QLearner.load_agent("sample.pkl", env)
     check_agent(agent)
     env.close()
 
 def main():
-
+    logging.basicConfig(format='%(asctime)s %(levelname)s  %(message)s', stream=sys.stdout, level=logging.DEBUG)
     # check_random()
     check_q_agent()
-    check_q_agent_file()
+    # check_q_agent_file()
     exit(0)
 
 

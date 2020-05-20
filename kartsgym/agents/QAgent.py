@@ -1,6 +1,7 @@
 import copy
 import itertools
 import math
+import pickle
 import random
 from collections import defaultdict
 
@@ -44,6 +45,30 @@ class QLearner(Agent):
         self.Q = defaultdict(lambda: copy.deepcopy(default_value))
         self.attempt_no = 0
         self.max_attempts = max_attempts
+
+    def save_agent(self, filename):
+        data = {
+            "alfa": self.alfa,
+            "gamma": self.gamma,
+            "backets": self.backets,
+            "action_backets": self.action_backets,
+            "max_attempts": self.max_attempts,
+            "attempt_no": self.attempt_no,
+            "Q": dict(self.Q)
+        }
+        with open(filename, 'wb') as handle:
+            pickle.dump(data, handle)
+
+    @staticmethod
+    def load_agent(filename, env):
+        with open(filename, 'rb') as handle:
+            data = pickle.load(handle)
+        agent = QLearner(env, data['alfa'], data['gamma'], data['backets'], data['action_backets'])
+        for x in data["Q"]:
+            agent.Q[x] = data["Q"][x]
+        agent.max_attempts = data["max_attempts"]
+        agent.attempt_no = data["attempt_no"]
+        return agent
 
     def learn(self, max_attempts, render=False):
         self.reset(max_attempts)

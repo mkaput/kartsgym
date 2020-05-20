@@ -1,3 +1,5 @@
+import logging
+
 import gym
 from kartsgym import environment
 from kartsgym.agents.QAgent import QLearner
@@ -8,7 +10,7 @@ __version__ = '0.1.0'
 
 def check_agent(agent):
     step, reward = agent.attempt(render=True, logs=True)
-    print(f"Episode finished after {step} steps with final reward {reward}")
+    logging.info(f"Episode finished after {step} steps with final reward {reward}")
 
 def check_random():
     env = gym.make('Karts-v0')

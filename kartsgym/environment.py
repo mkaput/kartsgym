@@ -264,7 +264,7 @@ class World:
 
         self.hit_barriers = False
         self.elapsed_steps = 0
-        self.distances = [np.inf for _ in RAY_ANGLES]
+        self.distances = [RAY_FOV for _ in RAY_ANGLES]
 
     @property
     def checkpoint_discontinuity(self):
@@ -280,7 +280,7 @@ class World:
         self.world.Step(1 / FPS, 6 * 30, 2 * 30)
         self.elapsed_steps += 1
 
-        self.distances = [np.inf for _ in RAY_ANGLES]
+        self.distances = [RAY_FOV for _ in RAY_ANGLES]
         for raycaster in self.raycasters:
             raycaster.cast()
 
@@ -346,7 +346,7 @@ class KartsEnv(Env):
             low=np.array([np.deg2rad(-35.0), -1.0]),
             high=np.array([np.deg2rad(35.0), 1.0]),
         )
-        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(7,))
+        self.observation_space = spaces.Box(-RAY_FOV, RAY_FOV, shape=(7,))
 
     def reset(self):
         self.world = World(self.map)

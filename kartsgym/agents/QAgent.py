@@ -28,13 +28,23 @@ class QLearner(Agent):
         self.lower_bounds = self.environment.observation_space.low
 
         self.action_backets = action_backets
-        self.action_low_bound = self.environment.action_space.low
-        self.action_high_bound = self.environment.action_space.high
+        self.action_low_bound = [
+            -0.4,
+            0
+        ]
+        self.action_high_bound = [
+            0.4,
+            0.5
+        ]
         self.actions = list(itertools.product(range(action_backets + 1), range(action_backets + 1)))
+        # self.actions = [self.discretise_action(action) for action in [(0, 0.3), (0.4, 0.3), (-0.4, 0.3)]]
+        # self.actions = [(5, 3), (2, 3), (8, 3)]
 
         self.alfa = alfa
         self.gamma = gamma
         self.Q = None
+
+        self.previous_reward = 0
 
         self.attempt_no = 0
         self.max_attempts = 1
@@ -54,7 +64,7 @@ class QLearner(Agent):
             "action_backets": self.action_backets,
             "max_attempts": self.max_attempts,
             "attempt_no": self.attempt_no,
-            "Q": dict(self.Q)
+            "Q": dict(self.Q),
         }
         with open(filename, 'wb') as handle:
             pickle.dump(data, handle)
@@ -76,6 +86,7 @@ class QLearner(Agent):
 
     def attempt(self, render=False, logs=False):
         self.attempt_no += 1
+        self.previous_reward = 0
         return super(QLearner, self).attempt(render, logs)
 
     def discretise(self, observation):
@@ -102,11 +113,11 @@ class QLearner(Agent):
     def calc_eps(self):
         progress = self.attempt_no / float(self.max_attempts)
         if progress < 0.15:
-            return 0.5
+            return 0.4
         if progress < 0.55:
             return 0.1
         if progress < 0.85:
-            return 0.01
+            return 0.05
         return 0.001
 
     def pick_action(self, observation):
@@ -118,7 +129,8 @@ class QLearner(Agent):
         return self.undiscretise_action(action)
 
     def update_knowledge(self, action, observation, new_observation, reward):
-        # reward = reward if reward < -200 else 0
+        # reward -= self.previous_reward
+        # reward = min(reward, 0)
         action = self.discretise_action(action)
         next_state_reward = self.Q[new_observation][self.best_action(new_observation)]
 

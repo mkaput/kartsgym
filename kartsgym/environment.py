@@ -345,7 +345,11 @@ class KartsEnv(Env):
             low=np.array([np.deg2rad(-35.0), -1.0]),
             high=np.array([np.deg2rad(35.0), 1.0]),
         )
-        self.observation_space = spaces.Box(-RAY_FOV, RAY_FOV, shape=(7,))
+        self.observation_space = spaces.Box(
+            low=np.array([-100, -60, *[0]*5]),
+            high=np.array([100, 60, *[RAY_FOV] * 5]),
+        )
+        spaces.Box(-RAY_FOV, RAY_FOV, shape=(7,))
 
     def reset(self):
         self.world = World(self.map)

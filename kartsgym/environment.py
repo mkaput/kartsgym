@@ -1,5 +1,4 @@
 # Based on: https://www.iforce2d.net/b2dtut/top-down-car
-
 import weakref
 from dataclasses import dataclass, InitVar, field
 from typing import List, Tuple
@@ -175,13 +174,13 @@ class Kart:
 
     @property
     def lateral_velocity(self) -> b2Vec2:
-        current_right_normal = self.body.GetWorldVector(b2Vec2(1, 0))
-        return b2Dot(current_right_normal, self.body.linearVelocity)
+        v = self.body.angularVelocity * self.body.linearVelocity.length
+        return v
 
     @property
     def forward_velocity(self) -> b2Vec2:
-        current_forward_normal = self.body.GetWorldVector(b2Vec2(0, 1))
-        return b2Dot(current_forward_normal, self.body.linearVelocity)
+        v = self.body.GetLocalVector(self.body.linearVelocity)[1]
+        return v
 
     def draw_chain(self):
         yield self.body

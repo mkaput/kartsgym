@@ -70,9 +70,9 @@ class QLearner(Agent):
         agent.attempt_no = data["attempt_no"]
         return agent
 
-    def learn(self, max_attempts, render=False):
+    def learn(self, max_attempts, render=False, logs=False):
         self.reset(max_attempts)
-        return super(QLearner, self).learn(max_attempts, render)
+        return super(QLearner, self).learn(max_attempts, render, logs)
 
     def attempt(self, render=False, logs=False):
         self.attempt_no += 1

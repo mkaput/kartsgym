@@ -8,5 +8,5 @@ class RandomAgent(Agent):
     def pick_action(self, observation):
         return self.environment.action_space.sample()
 
-    def learn(self, max_attempts, render=False):
+    def learn(self, max_attempts, render=False, logs=False):
         return []

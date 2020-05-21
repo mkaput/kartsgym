@@ -24,11 +24,11 @@ class Agent:
             observation = new_observation
         return step, reward
 
-    def learn(self, max_attempts, render=False):
+    def learn(self, max_attempts, render=False, logs=False):
         results = []
         for i in range(max_attempts):
             logging.info(f"start try {i}")
-            results.append(self.attempt(render=render))
+            results.append(self.attempt(render=render, logs=logs))
             logging.info(f"end {i} with results: steps: {results[i][0]}, reward: {results[i][1]}")
         return results
 

@@ -84,10 +84,10 @@ class QLearner(Agent):
         self.reset(max_attempts)
         return super(QLearner, self).learn(max_attempts, render, logs)
 
-    def attempt(self, render=False, logs=False):
+    def attempt(self, render=False, logs=False, sleep=0):
         self.attempt_no += 1
         self.previous_reward = 0
-        return super(QLearner, self).attempt(render, logs)
+        return super(QLearner, self).attempt(render, logs, sleep)
 
     def discretise(self, observation):
         return tuple(
@@ -121,7 +121,7 @@ class QLearner(Agent):
         return 0.001
 
     def pick_action(self, observation):
-        if random.uniform(0, 1) <= self.calc_eps():
+        if not self.eval and random.uniform(0, 1) <= self.calc_eps():
             action = random.choice(self.actions)
         else:
             action = self.best_action(observation)

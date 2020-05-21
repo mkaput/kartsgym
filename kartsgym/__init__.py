@@ -1,5 +1,6 @@
 import logging
 import sys
+import uuid
 
 import gym
 from kartsgym import environment
@@ -11,7 +12,8 @@ __version__ = '0.1.0'
 
 
 def check_agent(agent):
-    step, reward = agent.attempt(render=True, logs=True)
+    agent.eval = True
+    step, reward = agent.attempt(render=True, logs=True, sleep=5)
     logging.info(f"Episode finished after {step} steps with final reward {reward}")
 
 def check_random():
@@ -28,28 +30,28 @@ def check_rule():
 
 def check_q_agent():
     env = gym.make('Karts-v0')
-    agent = QLearner(env, alfa=0.01, gamma=0.95, backets=8, action_backets=2)
-    # for action in agent.actions:
-    #     print(action, agent.undiscretise_action(action))
-    agent.learn(100, render=False, logs=False)
+    agent = QLearner(env, alfa=0.01, gamma=0.8, backets=6, action_backets=2)
+    agent.learn(10000, render=False, logs=False)
     check_agent(agent)
-    agent.save_agent("sample1.pkl")
+    uid = str(uuid.uuid4())[-10:]
+    name = f"q-{uid}.pkl"
+    logging.info(name)
+    agent.save_agent(name)
     env.close()
 
 def check_q_agent_file():
     env = gym.make('Karts-v0')
-    agent = QLearner.load_agent("sample1.pkl", env)
+    agent = QLearner.load_agent("q-d40cf2957b-copy-bad.pkl", env)
     check_agent(agent)
     env.close()
 
 def main():
-    logging.basicConfig(format='%(asctime)s %(levelname)s  %(message)s', stream=sys.stdout, level=logging.DEBUG)
-    check_rule()
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', stream=sys.stdout, level=logging.DEBUG)
+    # check_rule()
     # check_random()
     # check_q_agent()
-    # check_q_agent_file()
+    check_q_agent_file()
     exit(0)
-
 
 if __name__ == '__main__':
     main()

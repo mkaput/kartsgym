@@ -1,16 +1,21 @@
 import abc
 import logging
+import time
 
 
 class Agent:
     def __init__(self, environment):
         self.environment = environment
+        self.eval = False
 
-    def attempt(self, render=False, logs=False):
+    def attempt(self, render=False, logs=False, sleep=0):
         observation = self.discretise(self.environment.reset())
         done = False
         step = 0
         reward = None
+        if render:
+            self.environment.render()
+            time.sleep(sleep)
         while not done:
             if render:
                 self.environment.render()
@@ -19,7 +24,8 @@ class Agent:
             new_observation = self.discretise(new_observation)
             if logs:
                 logging.debug(f"{observation} => {action} => {reward} {done}")
-            self.update_knowledge(action, observation, new_observation, reward)
+            if not self.eval:
+                self.update_knowledge(action, observation, new_observation, reward)
             step += 1
             observation = new_observation
         return step, reward

@@ -1,5 +1,4 @@
 # Based on: https://www.iforce2d.net/b2dtut/top-down-car
-
 import weakref
 from dataclasses import dataclass, InitVar, field
 from typing import List, Tuple
@@ -175,13 +174,13 @@ class Kart:
 
     @property
     def lateral_velocity(self) -> b2Vec2:
-        current_right_normal = self.body.GetWorldVector(b2Vec2(1, 0))
-        return b2Dot(current_right_normal, self.body.linearVelocity) * current_right_normal
+        v = self.body.angularVelocity * self.body.linearVelocity.length
+        return v
 
     @property
     def forward_velocity(self) -> b2Vec2:
-        current_forward_normal = self.body.GetWorldVector(b2Vec2(0, 1))
-        return b2Dot(current_forward_normal, self.body.linearVelocity) * current_forward_normal
+        v = self.body.GetLocalVector(self.body.linearVelocity)[1]
+        return v
 
     def draw_chain(self):
         yield self.body
@@ -264,7 +263,7 @@ class World:
 
         self.hit_barriers = False
         self.elapsed_steps = 0
-        self.distances = [np.inf for _ in RAY_ANGLES]
+        self.distances = [RAY_FOV for _ in RAY_ANGLES]
 
     @property
     def checkpoint_discontinuity(self):
@@ -280,7 +279,7 @@ class World:
         self.world.Step(1 / FPS, 6 * 30, 2 * 30)
         self.elapsed_steps += 1
 
-        self.distances = [np.inf for _ in RAY_ANGLES]
+        self.distances = [RAY_FOV for _ in RAY_ANGLES]
         for raycaster in self.raycasters:
             raycaster.cast()
 
@@ -346,7 +345,11 @@ class KartsEnv(Env):
             low=np.array([np.deg2rad(-35.0), -1.0]),
             high=np.array([np.deg2rad(35.0), 1.0]),
         )
-        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(7,))
+        self.observation_space = spaces.Box(
+            low=np.array([-100, -60, *[0]*5]),
+            high=np.array([100, 60, *[RAY_FOV] * 5]),
+        )
+        spaces.Box(-RAY_FOV, RAY_FOV, shape=(7,))
 
     def reset(self):
         self.world = World(self.map)
@@ -435,8 +438,8 @@ class KartsEnv(Env):
     def observe(self):
         kart = self.world.kart
         return [
-            kart.forward_velocity.length,
-            kart.lateral_velocity.length,
+            kart.forward_velocity,
+            kart.lateral_velocity,
             *self.world.distances,
         ]
 

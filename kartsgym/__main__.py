@@ -1,3 +1,3 @@
-from . import main
+from kartsgym import main
 
 main()

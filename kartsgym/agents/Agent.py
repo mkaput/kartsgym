@@ -23,9 +23,9 @@ class Agent:
             new_observation, reward, done, info = self.environment.step(action)
             new_observation = self.discretise(new_observation)
             if logs:
-                logging.debug(f"{observation} => {action} => {reward} {done}")
+                logging.debug(f"step: {step} {observation} => {action} => {reward} {done}")
             if not self.eval:
-                self.update_knowledge(action, observation, new_observation, reward)
+                self.update_knowledge(action, observation, new_observation, reward, done)
             step += 1
             observation = new_observation
         return step, reward
@@ -46,7 +46,7 @@ class Agent:
     def pick_action(self, observation):
         """Pick agent action base on environment"""
 
-    def update_knowledge(self, action, observation, new_observation, reward):
+    def update_knowledge(self, action, observation, new_observation, reward, done):
         """Update agent knowledge based on reward"""
         pass
 

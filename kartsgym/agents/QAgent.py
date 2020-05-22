@@ -128,9 +128,7 @@ class QLearner(Agent):
 
         return self.undiscretise_action(action)
 
-    def update_knowledge(self, action, observation, new_observation, reward):
-        # reward -= self.previous_reward
-        # reward = min(reward, 0)
+    def update_knowledge(self, action, observation, new_observation, reward, done):
         action = self.discretise_action(action)
         next_state_reward = self.Q[new_observation][self.best_action(new_observation)]
 

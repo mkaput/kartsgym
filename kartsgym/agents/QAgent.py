@@ -6,6 +6,7 @@ import random
 from collections import defaultdict
 
 from kartsgym.agents.Agent import Agent
+from kartsgym.agents.RewardSystem import RewardSystem
 
 
 def backet_in_bounds(value, low_bound, high_bound, backets):
@@ -21,8 +22,8 @@ def get_backet_value(backet, low_bound, high_bound, backets):
 
 
 class QLearner(Agent):
-    def __init__(self, environment, alfa, gamma, backets, action_backets):
-        super().__init__(environment)
+    def __init__(self, environment, alfa, gamma, backets, action_backets, reward_system=RewardSystem.NORMAL):
+        super().__init__(environment, reward_system)
         self.backets = backets
         self.upper_bounds = self.environment.observation_space.high
         self.lower_bounds = self.environment.observation_space.low

@@ -1,0 +1,10 @@
+dependencies:
+  - python==3.8
+  - cudnn==7.6.5
+  - cudatoolkit==10.1.243
+  - pip
+  - pip:
+    - gym==0.17.1
+    - tensorflow==2.2.0
+    - numpy==1.18.2
+    - box2d-py==2.3.8

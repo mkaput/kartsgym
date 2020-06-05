@@ -1,5 +1,6 @@
 import copy
 import itertools
+import logging
 import math
 import pickle
 import random
@@ -11,6 +12,7 @@ from tensorflow.python.keras.layers import Dense
 from tensorflow.python.keras.optimizer_v2.adam import Adam
 
 from kartsgym.agents.Agent import Agent
+from kartsgym.agents.RewardSystem import RewardSystem
 
 
 def backet_in_bounds(value, low_bound, high_bound, backets):
@@ -26,12 +28,22 @@ def get_backet_value(backet, low_bound, high_bound, backets):
 
 
 class DNQLearner(Agent):
-    def __init__(self, environment):
-        super().__init__(environment)
+    def __init__(self,
+                 environment,
+                 reward_system=RewardSystem.NORMAL):
+        super().__init__(environment, reward_system)
 
         self.upper_bounds = self.environment.observation_space.high
         self.lower_bounds = self.environment.observation_space.low
 
+        self.gamma = 0.95
+        self.epsilon = 0.5
+        self.epsilon_min = 0.001
+        self.epsilon_decay = 0.995
+        self.alfa = 0.001
+        self.batch_size = 32
+        self.learning_chance = 0.01
+        self.seperate_done = False
         self.action_backets = 2
         self.action_low_bound = [
             -0.4,
@@ -46,13 +58,10 @@ class DNQLearner(Agent):
         self.action_map = {a: i for i, a in enumerate(self.actions)}
 
         self.memory = deque(maxlen=10000)
+        self.done_memory = deque(maxlen=10000)
 
-        self.gamma = 0.95
-        self.epsilon = 0.5
-        self.epsilon_min = 0.001
-        self.epsilon_decay = 0.995
-        self.alfa = 0.001
-        self.batch_size = 5
+        self.max_attempts = 1
+        self.attempt_no = 1
 
         self.model = self._build_model()
 
@@ -64,6 +73,25 @@ class DNQLearner(Agent):
         model.add(Dense(len(self.actions), activation='linear'))
         model.compile(loss='mse', optimizer=Adam(lr=self.alfa))
         return model
+
+    def calc_eps(self):
+        progress = self.attempt_no / float(self.max_attempts)
+        if progress < 0.15:
+            return 0.5
+        if progress < 0.55:
+            return 0.1
+        if progress < 0.85:
+            return 0.05
+        return 0.001
+
+    def learn(self, max_attempts, render=False, logs=False):
+        self.max_attempts = max_attempts
+        return super(DNQLearner, self).learn(max_attempts, render, logs)
+
+    def attempt(self, render=False, logs=False, sleep=0):
+        self.attempt_no += 1
+        self.epsilon = self.calc_eps()
+        return super(DNQLearner, self).attempt(render, logs, sleep)
 
 
     def save_agent(self, filename):
@@ -107,21 +135,32 @@ class DNQLearner(Agent):
         return self.undiscretise_action(action)
 
     def replay(self):
-        minibatch = random.sample(self.memory, self.batch_size)
-        for action, observation, new_observation, reward, done in minibatch:
-            target = reward
+        done_sample = random.sample(self.done_memory, min(self.batch_size, len(self.done_memory)))
+        normal_sample = random.sample(self.memory, min(self.batch_size, len(self.memory)))
+        trainig_sample = [*done_sample, *normal_sample]
+
+        trainig_observations = np.array([observation for _, observation, _, _, _ in trainig_sample])
+        trainig_new_observations = np.array([new_observation for _, _, new_observation, _, _ in trainig_sample])
+
+        training_f = self.model.predict(trainig_observations)
+        training_targets = [np.amax(x) for x in self.model.predict(trainig_new_observations)]
+
+        for sample, target_f, target in zip(trainig_sample, training_f, training_targets):
+            action, observation, new_observation, reward, done = sample
             if not done:
-                target = (reward + self.gamma *
-                          np.amax(self.model.predict(np.array([new_observation]))[0]))
-            target_f = self.model.predict(np.array([observation]))
-            target_f[0][action] = target
-            self.model.fit(np.array([observation]), target_f, epochs=1, verbose=0)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+                target = reward + self.gamma * target
+            else:
+                target = reward
+            target_f[action] = target
+
+        self.model.fit(trainig_observations, training_f, epochs=1, verbose=0, batch_size=len(trainig_observations))
 
     def update_knowledge(self, action, observation, new_observation, reward, done):
         action = self.action_map[self.discretise_action(action)]
+        if done and self.seperate_done:
+            self.done_memory.append((action, observation, new_observation, reward, done))
+        else:
+            self.memory.append((action, observation, new_observation, reward, done))
 
-        self.memory.append((action, observation, new_observation, reward, done))
-        if len(self.memory) > self.batch_size:
+        if done or random.uniform(0, 1) <= self.learning_chance:
             self.replay()

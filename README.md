@@ -12,7 +12,7 @@ Agent get information about:
  * kart's angular velocity
  * kart's distance to nearest obstacle in 5 directions
 
-![observation image](./assets/observation.png)
+![observation image](./assets/observation.PNG)
 
 # Actions
 
